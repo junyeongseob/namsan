@@ -6,16 +6,15 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# 🔥 DB 경로 안정화 (Render 대응)
+# DB 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "attendance.db")
 
-# 🔥 DB 초기화 (테이블 없으면 자동 생성)
+# DB 초기화
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    
-    # 근무표 테이블
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS work_schedule (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,6 @@ def init_db():
     )
     """)
 
-    # 비상근무 테이블
     cur.execute("""
     CREATE TABLE IF NOT EXISTS special_duty (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +41,6 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-# 🔥 서버 시작 시 DB 초기화 실행
 init_db()
 
 # 근무표 조회
@@ -68,6 +65,7 @@ def get_schedule():
             (f"{month}%",)
         )
     else:
+        conn.close()
         return jsonify({})
 
     rows = cur.fetchall()
@@ -205,7 +203,7 @@ def delete_special():
 
     return jsonify({"result": "ok"})
 
-# 🔥 엑셀 자동 업로드
+# 엑셀 자동 업로드
 @app.route("/upload_excel_auto", methods=["POST"])
 def upload_excel_auto():
     file = request.files.get("file")
@@ -221,22 +219,20 @@ def upload_excel_auto():
 
     inserted = 0
 
-    # 🔥 현재 남산분소 양식 기준
-    # 필요하면 이 값들만 미세조정하면 됨
-    header_row = 4       # 근무지 제목 행
-    start_data_row = 5   # 실제 날짜 시작 행
-    date_col = 1         # 날짜 열 (A열 기준)
-    work_cols = range(3, ws.max_column + 1)  # 근무지 시작 열부터 끝까지
+    # 네 양식 기준 1차 설정값
+    header_row1 = 3   # 윗줄 헤더
+    header_row2 = 4   # 아랫줄 헤더
+    start_row = 5     # 실제 데이터 시작 행
+    date_col = 1      # 날짜 열
 
-    ignore_headers = {"요일", "일자", "주요순찰지", "비고", ""}
+    ignore_words = ["요일", "일자", "주요", "비고"]
 
-    for row in range(start_data_row, ws.max_row + 1):
+    for row in range(start_row, ws.max_row + 1):
         raw_date = ws.cell(row=row, column=date_col).value
 
         if not raw_date:
             continue
 
-        # 날짜 문자열 처리
         if isinstance(raw_date, datetime):
             date_str = raw_date.strftime("%Y-%m-%d")
         else:
@@ -245,25 +241,33 @@ def upload_excel_auto():
         if date_str in ["", "None", "nan"]:
             continue
 
-        for col in work_cols:
-            header_value = ws.cell(row=header_row, column=col).value
-            cell_value = ws.cell(row=row, column=col).value
+        for col in range(2, ws.max_column + 1):
+            h1 = ws.cell(row=header_row1, column=col).value
+            h2 = ws.cell(row=header_row2, column=col).value
+            cell = ws.cell(row=row, column=col).value
 
-            if not header_value or not cell_value:
+            if not cell:
                 continue
 
-            workplace = str(header_value).strip()
+            header_parts = []
+            if h1:
+                header_parts.append(str(h1).strip())
+            if h2:
+                header_parts.append(str(h2).strip())
 
-            if workplace in ignore_headers:
+            workplace = " ".join([x for x in header_parts if x])
+
+            if not workplace:
                 continue
 
-            text = str(cell_value).strip()
+            if any(word in workplace for word in ignore_words):
+                continue
+
+            text = str(cell).strip()
 
             if text in ["", "-", "None", "nan"]:
                 continue
 
-            # 셀 안 이름 분리
-            # 줄바꿈 + 공백 기준
             names = []
             for line in text.splitlines():
                 line = line.strip()
@@ -275,7 +279,6 @@ def upload_excel_auto():
                         names.append(name)
 
             for name in names:
-                # 너무 짧은 값이나 쓸모없는 값 필터
                 if name in ["-", "및", "/", "(", ")", "nan", "None"]:
                     continue
 
@@ -288,7 +291,7 @@ def upload_excel_auto():
     conn.commit()
     conn.close()
 
-    return jsonify({"message": f"{inserted}개 자동 입력 완료"})
+    return jsonify({"message": f"{inserted}개 입력 완료"})
 
 # HTML
 @app.route("/")
