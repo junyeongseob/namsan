@@ -3,7 +3,10 @@ import sqlite3
 import os
 
 app = Flask(__name__)
-DB_PATH = "attendance.db"
+
+# 🔥 DB 경로 안정화 (Render 대응)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "attendance.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -39,9 +42,7 @@ def get_schedule():
 
     result = {}
     for r in rows:
-        if r["name"] not in result:
-            result[r["name"]] = {}
-        result[r["name"]][r["date"]] = r["status"]
+        result.setdefault(r["name"], {})[r["date"]] = r["status"]
 
     return jsonify(result)
 
@@ -71,6 +72,7 @@ def get_special():
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule():
     data = request.json
+
     conn = get_db()
     cur = conn.cursor()
 
@@ -81,9 +83,10 @@ def add_schedule():
 
     conn.commit()
     conn.close()
+
     return jsonify({"result": "ok"})
 
-# ⭐ 근무 일괄 추가 (엑셀 복붙)
+# ⭐ 근무 일괄 추가
 @app.route("/add_schedule_bulk", methods=["POST"])
 def add_schedule_bulk():
     data = request.json["data"]
@@ -109,12 +112,14 @@ def add_schedule_bulk():
 
     conn.commit()
     conn.close()
+
     return jsonify({"result": "ok"})
 
 # ⭐ 비상근무 추가
 @app.route("/add_special", methods=["POST"])
 def add_special():
     data = request.json
+
     conn = get_db()
     cur = conn.cursor()
 
@@ -125,6 +130,43 @@ def add_special():
 
     conn.commit()
     conn.close()
+
+    return jsonify({"result": "ok"})
+
+# ⭐ 근무 삭제
+@app.route("/delete_schedule", methods=["POST"])
+def delete_schedule():
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "DELETE FROM work_schedule WHERE name=? AND date=?",
+        (data["name"], data["date"])
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"result": "ok"})
+
+# ⭐ 비상근무 삭제
+@app.route("/delete_special", methods=["POST"])
+def delete_special():
+    data = request.json
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "DELETE FROM special_duty WHERE name=? AND date=? AND duty=?",
+        (data["name"], data["date"], data["duty"])
+    )
+
+    conn.commit()
+    conn.close()
+
     return jsonify({"result": "ok"})
 
 @app.route("/")
