@@ -5,66 +5,51 @@ import os
 app = Flask(__name__)
 DB_PATH = "attendance.db"
 
-people_info = [
-    ("남산분소장", "남산분소 업무총괄"),
-    ("김재홍", "남산분소 현장관리"),
-    ("강이레", "남산분소 현장관리"),
-    ("윤동희", "안전관리"),
-    ("예린", "공원자원해설"),
-    ("권용조", "공원자원해설"),
-    ("손영인", "공원자원해설"),
-    ("옥희영", "공원자원해설"),
-    ("김영호", "공원환경관리"),
-    ("서종명", "공원환경관리"),
-    ("고현찬", "공원환경관리"),
-    ("김복현", "녹색순찰대"),
-    ("서진숙", "녹색순찰대"),
-    ("정문길", "녹색순찰대"),
-    ("김태문", "녹색순찰대"),
-    ("최성복", "사회복무요원")
-]
-
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
+# 근무표 조회
 @app.route("/schedule")
-def schedule():
+def get_schedule():
     dates = request.args.get("dates")
     month = request.args.get("month")
+
     conn = get_db()
     cur = conn.cursor()
 
     if dates:
         date_list = dates.split(",")
-        placeholders = ",".join("?" * len(date_list))
+        placeholders = ",".join("?"*len(date_list))
         cur.execute(
             f"SELECT name, date, status FROM work_schedule WHERE date IN ({placeholders})",
             date_list
         )
-    else:
+    elif month:
         cur.execute(
             "SELECT name, date, status FROM work_schedule WHERE date LIKE ?",
             (f"{month}%",)
         )
+    else:
+        return jsonify({})
 
     rows = cur.fetchall()
     conn.close()
 
     result = {}
     for r in rows:
-        result.setdefault(r["name"], {})[r["date"]] = r["status"]
+        if r["name"] not in result:
+            result[r["name"]] = {}
+        result[r["name"]][r["date"]] = r["status"]
 
-    ordered = {}
-    for name, _ in people_info:
-        ordered[name] = result.get(name, {})
+    return jsonify(result)
 
-    return jsonify(ordered)
-
+# 비상근무 조회
 @app.route("/special")
-def special():
+def get_special():
     month = request.args.get("month")
+
     conn = get_db()
     cur = conn.cursor()
 
@@ -82,30 +67,69 @@ def special():
 
     return jsonify(result)
 
-# ⭐ 추가된 부분
+# 근무 추가
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule():
     data = request.json
-    name = data["name"]
-    date = data["date"]
-    status = data["status"]
-
     conn = get_db()
     cur = conn.cursor()
 
     cur.execute(
         "INSERT INTO work_schedule (name, date, status) VALUES (?, ?, ?)",
-        (name, date, status)
+        (data["name"], data["date"], data["status"])
     )
 
     conn.commit()
     conn.close()
+    return jsonify({"result": "ok"})
 
-    return jsonify({"result": "success"})
+# ⭐ 근무 일괄 추가 (엑셀 복붙)
+@app.route("/add_schedule_bulk", methods=["POST"])
+def add_schedule_bulk():
+    data = request.json["data"]
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    for line in data:
+        if "\t" in line:
+            parts = line.split("\t")
+        else:
+            parts = line.split(",")
+
+        if len(parts) != 3:
+            continue
+
+        name, date, status = [p.strip() for p in parts]
+
+        cur.execute(
+            "INSERT INTO work_schedule (name, date, status) VALUES (?, ?, ?)",
+            (name, date, status)
+        )
+
+    conn.commit()
+    conn.close()
+    return jsonify({"result": "ok"})
+
+# ⭐ 비상근무 추가
+@app.route("/add_special", methods=["POST"])
+def add_special():
+    data = request.json
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "INSERT INTO special_duty (duty, name, date) VALUES (?, ?, ?)",
+        (data["duty"], data["name"], data["date"])
+    )
+
+    conn.commit()
+    conn.close()
+    return jsonify({"result": "ok"})
 
 @app.route("/")
 def index():
     return send_from_directory(os.getcwd(), "test.html")
 
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=5000)
