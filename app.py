@@ -6,16 +6,15 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# 🔥 DB 경로 안정화 (Render 대응)
+# DB 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "attendance.db")
 
-# 🔥 DB 초기화 (테이블 없으면 자동 생성)
+# DB 초기화
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    
-    # 근무표 테이블
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS work_schedule (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,6 @@ def init_db():
     )
     """)
 
-    # 비상근무 테이블
     cur.execute("""
     CREATE TABLE IF NOT EXISTS special_duty (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,10 +41,8 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-# 🔥 서버 시작 시 DB 초기화 실행
 init_db()
 
-# 근무표 조회
 @app.route("/schedule")
 def get_schedule():
     dates = request.args.get("dates")
@@ -68,6 +64,7 @@ def get_schedule():
             (f"{month}%",)
         )
     else:
+        conn.close()
         return jsonify({})
 
     rows = cur.fetchall()
@@ -79,7 +76,6 @@ def get_schedule():
 
     return jsonify(result)
 
-# 비상근무 조회
 @app.route("/special")
 def get_special():
     month = request.args.get("month")
@@ -101,7 +97,6 @@ def get_special():
 
     return jsonify(result)
 
-# 근무 추가
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule():
     data = request.json
@@ -119,7 +114,6 @@ def add_schedule():
 
     return jsonify({"result": "ok"})
 
-# 근무 일괄 추가
 @app.route("/add_schedule_bulk", methods=["POST"])
 def add_schedule_bulk():
     data = request.json["data"]
@@ -151,7 +145,6 @@ def add_schedule_bulk():
 
     return jsonify({"result": "ok"})
 
-# 비상근무 추가
 @app.route("/add_special", methods=["POST"])
 def add_special():
     data = request.json
@@ -169,7 +162,6 @@ def add_special():
 
     return jsonify({"result": "ok"})
 
-# 근무 삭제
 @app.route("/delete_schedule", methods=["POST"])
 def delete_schedule():
     data = request.json
@@ -187,7 +179,6 @@ def delete_schedule():
 
     return jsonify({"result": "ok"})
 
-# 비상근무 삭제
 @app.route("/delete_special", methods=["POST"])
 def delete_special():
     data = request.json
@@ -205,20 +196,15 @@ def delete_special():
 
     return jsonify({"result": "ok"})
 
-# 🔥 기존 근무표 데이터 전체 삭제 (한 번만 쓰면 됨)
 @app.route("/clear_schedule", methods=["POST"])
 def clear_schedule():
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("DELETE FROM work_schedule")
-
     conn.commit()
     conn.close()
-
     return jsonify({"result": "ok"})
 
-# 🔥 엑셀 자동 업로드
 @app.route("/upload_excel_auto", methods=["POST"])
 def upload_excel_auto():
     file = request.files.get("file")
@@ -234,21 +220,70 @@ def upload_excel_auto():
 
     inserted = 0
 
-    # 남산분소 양식 기준
-    header_row = 4       # 근무지 제목 행
-    start_data_row = 5   # 실제 데이터 시작 행
-    date_col = 1         # 날짜 열
-    work_cols = range(3, ws.max_column + 1)
+    # 네 엑셀 양식 기준 고정값
+    start_data_row = 5
+    date_col = 1  # A열 날짜
 
-    ignore_headers = {"요일", "일자", "주요순찰지", "비고", ""}
+    # 열 번호 -> 근무지
+    workplace_map = {
+        3: "삼릉",
+        4: "동남산",
+        5: "포석정",
+        6: "새갓골",
+        7: "용장",
+        8: "분소",
+        9: "출장",
+        10: "출장",
+    }
+
+    # 이름 사전
+    known_names = [
+        "남산분소장",
+        "김재홍", "강이레", "윤동희",
+        "예린", "권용조", "손영인", "옥희영",
+        "김영호", "서종명", "고현찬",
+        "김복현", "서진숙", "정문길", "김태문",
+        "최성복",
+        "이성원", "이유형"
+    ]
+
+    def split_names(text):
+        text = str(text).strip()
+        if text in ["", "-", "None", "nan"]:
+            return []
+
+        text = text.replace("\n", " ")
+        text = text.replace(",", " ")
+        text = text.replace("·", " ")
+        text = text.replace("/", " ")
+
+        rough_parts = [x.strip() for x in text.split() if x.strip()]
+        result = []
+
+        for part in rough_parts:
+            if part in known_names:
+                result.append(part)
+                continue
+
+            temp = part
+            matched_any = True
+
+            while temp and matched_any:
+                matched_any = False
+                for name in sorted(known_names, key=len, reverse=True):
+                    if temp.startswith(name):
+                        result.append(name)
+                        temp = temp[len(name):]
+                        matched_any = True
+                        break
+
+        return result
 
     for row in range(start_data_row, ws.max_row + 1):
         raw_date = ws.cell(row=row, column=date_col).value
-
         if not raw_date:
             continue
 
-        # 🔥 날짜 형식 통일
         if isinstance(raw_date, datetime):
             date_str = raw_date.strftime("%Y-%m-%d")
         else:
@@ -257,46 +292,21 @@ def upload_excel_auto():
             if text_date in ["", "None", "nan"]:
                 continue
 
-            # 4/8 → 2026-04-08 형태로 보정
             if "/" in text_date and len(text_date.split("/")) == 2:
                 try:
                     month, day = text_date.split("/")
                     date_str = f"2026-{int(month):02d}-{int(day):02d}"
                 except:
-                    date_str = text_date
+                    continue
             else:
                 date_str = text_date
 
-        for col in work_cols:
-            header_value = ws.cell(row=header_row, column=col).value
+        for col, workplace in workplace_map.items():
             cell_value = ws.cell(row=row, column=col).value
-
             if not cell_value:
                 continue
 
-            workplace = str(header_value).strip() if header_value else f"col_{col}"
-
-            if workplace in ignore_headers:
-                continue
-
-            text = str(cell_value).strip()
-
-            if text in ["", "-", "None", "nan"]:
-                continue
-
-            # 🔥 셀 안 이름 분리
-            names = []
-            for line in text.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                for name in line.split():
-                    name = name.strip()
-                    if name:
-                        # 🔥 이름 정리
-                        name = name.replace(",", "").replace("·", "").replace("/", "")
-                        if name not in ["-", "및", "nan", "None", "(", ")"]:
-                            names.append(name)
+            names = split_names(cell_value)
 
             for name in names:
                 cur.execute(
@@ -310,7 +320,6 @@ def upload_excel_auto():
 
     return jsonify({"message": f"{inserted}개 자동 입력 완료"})
 
-# HTML
 @app.route("/")
 def index():
     return send_from_directory(os.getcwd(), "test.html")
