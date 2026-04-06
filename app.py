@@ -138,6 +138,9 @@ def add_schedule_bulk():
 
         name, date, status = [p.strip() for p in parts]
 
+        if not name or not date or not status:
+            continue
+
         cur.execute(
             "INSERT INTO work_schedule (name, date, status) VALUES (?, ?, ?)",
             (name, date, status)
@@ -218,44 +221,69 @@ def upload_excel_auto():
 
     inserted = 0
 
-    # 남산분소 양식 기준 1차 설정값
-    # 안 맞으면 이 3개만 나중에 조정하면 됨
-    date_row = 2
-    name_col = 2
-    start_col = 3
+    # 🔥 현재 남산분소 양식 기준
+    # 필요하면 이 값들만 미세조정하면 됨
+    header_row = 4       # 근무지 제목 행
+    start_data_row = 5   # 실제 날짜 시작 행
+    date_col = 1         # 날짜 열 (A열 기준)
+    work_cols = range(3, ws.max_column + 1)  # 근무지 시작 열부터 끝까지
 
-    for row in range(3, ws.max_row + 1):
-        name = ws.cell(row=row, column=name_col).value
+    ignore_headers = {"요일", "일자", "주요순찰지", "비고", ""}
 
-        if not name:
+    for row in range(start_data_row, ws.max_row + 1):
+        raw_date = ws.cell(row=row, column=date_col).value
+
+        if not raw_date:
             continue
 
-        for col in range(start_col, ws.max_column + 1):
-            date_cell = ws.cell(row=date_row, column=col).value
-            status = ws.cell(row=row, column=col).value
+        # 날짜 문자열 처리
+        if isinstance(raw_date, datetime):
+            date_str = raw_date.strftime("%Y-%m-%d")
+        else:
+            date_str = str(raw_date).strip()
 
-            if not date_cell or not status:
+        if date_str in ["", "None", "nan"]:
+            continue
+
+        for col in work_cols:
+            header_value = ws.cell(row=header_row, column=col).value
+            cell_value = ws.cell(row=row, column=col).value
+
+            if not header_value or not cell_value:
                 continue
 
-            # 날짜 변환
-            if isinstance(date_cell, datetime):
-                date_str = date_cell.strftime("%Y-%m-%d")
-            else:
-                date_str = str(date_cell).strip()
+            workplace = str(header_value).strip()
 
-            name_str = str(name).strip()
-            status_str = str(status).strip()
-
-            if name_str in ["None", "nan", ""]:
-                continue
-            if status_str in ["None", "nan", ""]:
+            if workplace in ignore_headers:
                 continue
 
-            cur.execute(
-                "INSERT INTO work_schedule (name, date, status) VALUES (?, ?, ?)",
-                (name_str, date_str, status_str)
-            )
-            inserted += 1
+            text = str(cell_value).strip()
+
+            if text in ["", "-", "None", "nan"]:
+                continue
+
+            # 셀 안 이름 분리
+            # 줄바꿈 + 공백 기준
+            names = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                for name in line.split():
+                    name = name.strip()
+                    if name:
+                        names.append(name)
+
+            for name in names:
+                # 너무 짧은 값이나 쓸모없는 값 필터
+                if name in ["-", "및", "/", "(", ")", "nan", "None"]:
+                    continue
+
+                cur.execute(
+                    "INSERT INTO work_schedule (name, date, status) VALUES (?, ?, ?)",
+                    (name, date_str, workplace)
+                )
+                inserted += 1
 
     conn.commit()
     conn.close()
