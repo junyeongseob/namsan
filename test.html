@@ -2,227 +2,92 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>남산분소 근무현황표</title>
-<style>
-table { border-collapse: collapse; width: 100%; }
-td, th { border: 1px solid #333; padding: 5px; text-align: center; }
-
-.today { background-color: yellow; }
-.휴무 { background-color: lightgray; }
-.반가, .연가, .조퇴 { background-color: lightblue; }
-.출장 { background-color: orange; }
-.삼릉, .포석정, .새갓골, .용장, .동남산, .분소 { background-color: lightgreen; }
-
-.sky { background:#d0e7ff; }
-.green { background:#e0ffc1; }
-.purple { background:#e8d4ff; }
-.orange { background:#ffe6cc; }
-.blue { background:#a0d8ff; }
-
-.flex-special-container {
-    display: flex;
-    gap: 50px;
-    margin-top: 15px;
-}
-
-.flex-column, .special-column {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.flex-column div {
-    color: darkblue;
-    font-weight: bold;
-}
-
-.special-column div {
-    padding: 2px 4px;
-    border-radius: 3px;
-    margin-bottom: 3px;
-    display: inline-block;
-}
-
-.fire { background:#d2b48c; }
-.alert { background:#ffcccc; }
-.warning { background:#ff0000; color:white; }
-</style>
+<title>근무현황</title>
 </head>
 <body>
 
-<h2>남산분소 근무현황표</h2>
+<h2>근무현황</h2>
 
-<label>월: <input type="month" id="month"></label>
-<label>일: <input type="date" id="day"></label>
 <button onclick="loadSchedule()">조회</button>
 
-<!-- ⭐ 추가된 근무 입력 영역 -->
-<h3>근무 추가</h3>
-이름: <input id="name"><br>
-날짜: <input type="date" id="date_input"><br>
-상태: <input id="status"><br>
-<button onclick="addSchedule()">추가</button>
+<h3>오늘 인원</h3>
+<div id="summary"></div>
+
+<h3>비상근무</h3>
+<div id="special"></div>
 
 <h3>근무표</h3>
-<table>
+<table border="1">
 <thead id="head"></thead>
 <tbody id="body"></tbody>
 </table>
 
-<h3>유연근무자 & 비상근무</h3>
-<div class="flex-special-container">
-    <div id="flex_column" class="flex-column"></div>
-    <div id="special_column" class="special-column"></div>
-</div>
+<h3>근무 추가</h3>
+<input id="name" placeholder="이름">
+<input id="date" type="date">
+<input id="status" placeholder="상태">
+<button onclick="addSchedule()">추가</button>
+
+<h3>비상근무 추가</h3>
+<input id="s_name" placeholder="이름">
+<input id="s_date" type="date">
+<input id="s_duty" placeholder="근무종류">
+<button onclick="addSpecial()">추가</button>
+
+<h3>근무표 일괄 입력 (엑셀 복붙)</h3>
+<textarea id="bulk"></textarea><br>
+<button onclick="addBulk()">일괄 추가</button>
 
 <script>
 
-// 사람 정보
-const people = [
-["남산분소장","남산분소 업무총괄","sky"],
-["김재홍","남산분소 현장관리","sky"],
-["강이레","남산분소 현장관리","sky"],
-["윤동희","안전관리","sky"],
-["예린","공원자원해설","green"],
-["권용조","공원자원해설","green"],
-["손영인","공원자원해설","green"],
-["옥희영","공원자원해설","green"],
-["김영호","공원환경관리","purple"],
-["서종명","공원환경관리","purple"],
-["고현찬","공원환경관리","purple"],
-["김복현","녹색순찰대","orange"],
-["서진숙","녹색순찰대","orange"],
-["정문길","녹색순찰대","orange"],
-["김태문","녹색순찰대","orange"],
-["최성복","사회복무요원","blue"]
-];
-
-const flexData = [
-{ name:"예린", text:"월~금 08:30~17:30" },
-{ name:"권용조", text:"화,목 08:00~17:00" },
-{ name:"옥희영", text:"토 08:00~17:00" },
-{ name:"서진숙", text:"수 08:00~17:00" }
-];
-
 function loadSchedule(){
-    const m = document.getElementById("month").value;
-    const d = document.getElementById("day").value;
-
-    let dates=[];
-
-    if(d){
-        dates=[d];
-    } else if(!m){
-        let t=new Date();
-        for(let i=0;i<3;i++){
-            let x=new Date(t);
-            x.setDate(t.getDate()+i);
-            dates.push(x.toISOString().slice(0,10));
-        }
-    } else {
-        let y = m.split("-")[0];
-        let mm = m.split("-")[1];
-        let last = new Date(y, mm, 0).getDate();
-        for(let i=1;i<=last;i++){
-            dates.push(`${m}-${String(i).padStart(2,"0")}`);
-        }
-    }
-
-    let url = (!m || d) 
-        ? `/schedule?dates=${dates.join(",")}`
-        : `/schedule?month=${m}`;
-
-    fetch(url)
+    fetch("/schedule?month=2026-04")
     .then(r=>r.json())
-    .then(data => buildTable(data, dates))
-    .then(()=> showFlexSpecial(dates[0]));
-}
-
-function buildTable(data, dates){
-    let head="<tr><th>이름(업무)</th>";
-    dates.forEach(x=>head+=`<th>${x.slice(8)}</th>`);
-    head+="</tr>";
-    document.getElementById("head").innerHTML=head;
-
-    let body="";
-    const today = new Date().toISOString().slice(0,10);
-
-    people.forEach(p=>{
-        const name=p[0], job=p[1], cls=p[2];
-        body+=`<tr><td class="${cls}">${name}(${job})</td>`;
-        dates.forEach(d=>{
-            const s = (data[name] && data[name][d]) || "";
-            const t = (d===today) ? "today" : "";
-            body+=`<td class="${s} ${t}">${s}</td>`;
-        });
-        body+="</tr>";
-    });
-    document.getElementById("body").innerHTML=body;
-}
-
-function showFlexSpecial(date){
-    const flexCol = document.getElementById("flex_column");
-    const specialCol = document.getElementById("special_column");
-    flexCol.innerHTML="";
-    specialCol.innerHTML="";
-
-    flexData.forEach(f=>{
-        const div = document.createElement("div");
-        div.textContent = `${f.name} ${f.text}`;
-        flexCol.appendChild(div);
+    .then(data=>{
+        document.getElementById("body").innerHTML = JSON.stringify(data);
     });
 
-    fetch(`/special?month=${date.slice(0,7)}`)
+    fetch("/special?month=2026-04")
     .then(r=>r.json())
-    .then(special=>{
-        if(special[date]){
-            const order=["산불야간순찰","비상근무(기상특보) 주의보","비상근무(기상특보) 경보"];
-            order.forEach(duty=>{
-                if(special[date][duty]){
-                    const div = document.createElement("div");
-
-                    const dutySpan = document.createElement("span");
-                    dutySpan.textContent = duty + ": ";
-                    dutySpan.className = duty.includes("산불") ? "fire" :
-                                        duty.includes("주의보") ? "alert" :
-                                        duty.includes("경보") ? "warning" : "";
-                    div.appendChild(dutySpan);
-
-                    special[date][duty].forEach(name=>{
-                        const span = document.createElement("span");
-                        span.textContent = name;
-                        span.className = duty.includes("산불") ? "fire" :
-                                         duty.includes("주의보") ? "alert" :
-                                         duty.includes("경보") ? "warning" : "";
-                        div.appendChild(span);
-                        div.appendChild(document.createTextNode(" "));
-                    });
-                    specialCol.appendChild(div);
-                }
-            });
-        }
+    .then(data=>{
+        document.getElementById("special").innerHTML = JSON.stringify(data);
     });
 }
 
-// ⭐ 추가된 함수
 function addSchedule(){
-    const name = document.getElementById("name").value;
-    const date = document.getElementById("date_input").value;
-    const status = document.getElementById("status").value;
-
-    fetch("/add_schedule", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ name, date, status })
-    })
-    .then(r => r.json())
-    .then(() => {
-        alert("추가 완료");
-        loadSchedule();
-    });
+    fetch("/add_schedule",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            name:document.getElementById("name").value,
+            date:document.getElementById("date").value,
+            status:document.getElementById("status").value
+        })
+    }).then(()=>alert("추가 완료"));
 }
+
+function addSpecial(){
+    fetch("/add_special",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            name:document.getElementById("s_name").value,
+            date:document.getElementById("s_date").value,
+            duty:document.getElementById("s_duty").value
+        })
+    }).then(()=>alert("추가 완료"));
+}
+
+function addBulk(){
+    const lines = document.getElementById("bulk").value.split("\n");
+
+    fetch("/add_schedule_bulk",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({data:lines})
+    }).then(()=>alert("일괄 완료"));
+}
+
 </script>
 
 </body>
