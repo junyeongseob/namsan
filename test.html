@@ -56,6 +56,13 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
 <label>일: <input type="date" id="day"></label>
 <button onclick="loadSchedule()">조회</button>
 
+<!-- ⭐ 추가된 근무 입력 영역 -->
+<h3>근무 추가</h3>
+이름: <input id="name"><br>
+날짜: <input type="date" id="date_input"><br>
+상태: <input id="status"><br>
+<button onclick="addSchedule()">추가</button>
+
 <h3>근무표</h3>
 <table>
 <thead id="head"></thead>
@@ -194,6 +201,26 @@ function showFlexSpecial(date){
                 }
             });
         }
+    });
+}
+
+// ⭐ 추가된 함수
+function addSchedule(){
+    const name = document.getElementById("name").value;
+    const date = document.getElementById("date_input").value;
+    const status = document.getElementById("status").value;
+
+    fetch("/add_schedule", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ name, date, status })
+    })
+    .then(r => r.json())
+    .then(() => {
+        alert("추가 완료");
+        loadSchedule();
     });
 }
 </script>
