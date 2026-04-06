@@ -23,6 +23,9 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
     display: flex;
     gap: 50px;
     margin-top: 15px;
+    background: #f5f5f5;
+    padding: 10px;
+    border-radius: 8px;
 }
 
 .flex-column, .special-column {
@@ -46,6 +49,11 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
 .fire { background:#d2b48c; }
 .alert { background:#ffcccc; }
 .warning { background:#ff0000; color:white; }
+
+#summary {
+    font-weight: bold;
+    margin-top: 10px;
+}
 </style>
 </head>
 
@@ -57,23 +65,39 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
 <label>일: <input type="date" id="day"></label>
 <button onclick="loadSchedule()">조회</button>
 
-<!-- 🔝 추가: 인원 현황 -->
+<!-- 🔝 인원 현황 -->
 <h3>오늘 인원 현황</h3>
 <div id="summary"></div>
 
-<h3>근무표</h3>
-<table>
-<thead id="head"></thead>
-<tbody id="body"></tbody>
-</table>
-
+<!-- 🔝 유연근무 + 비상근무 -->
 <h3>유연근무자 & 비상근무</h3>
 <div class="flex-special-container">
     <div id="flex_column" class="flex-column"></div>
     <div id="special_column" class="special-column"></div>
 </div>
 
-<!-- 🔽 추가: 근무표 일괄 입력 -->
+<!-- 🔽 근무표 -->
+<h3>근무표</h3>
+<table>
+<thead id="head"></thead>
+<tbody id="body"></tbody>
+</table>
+
+<!-- 🔽 근무 추가 -->
+<h3>근무 추가</h3>
+이름: <input id="name">
+날짜: <input type="date" id="date_input">
+상태: <input id="status">
+<button onclick="addSchedule()">추가</button>
+
+<!-- 🔽 비상근무 추가 -->
+<h3>비상근무 추가</h3>
+이름: <input id="s_name">
+날짜: <input type="date" id="s_date">
+근무종류: <input id="s_duty">
+<button onclick="addSpecial()">추가</button>
+
+<!-- 🔽 일괄 입력 -->
 <h3>근무표 일괄 입력 (엑셀 복붙)</h3>
 <textarea id="schedule_bulk" rows="5" cols="60"
 placeholder="이름    날짜    상태"></textarea><br>
@@ -140,12 +164,12 @@ function loadSchedule(){
     .then(r=>r.json())
     .then(data=>{
         buildTable(data, dates);
-        updateSummary(data); // ⭐ 추가
+        updateSummary(data);
     })
     .then(()=> showFlexSpecial(dates[0]));
 }
 
-// ⭐ 인원 요약
+// 인원 요약
 function updateSummary(data){
     const today = new Date().toISOString().slice(0,10);
 
@@ -213,19 +237,51 @@ function showFlexSpecial(date){
     });
 }
 
-// ⭐ 일괄 입력
+// 근무 추가
+function addSchedule(){
+    fetch("/add_schedule",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            name:document.getElementById("name").value,
+            date:document.getElementById("date_input").value,
+            status:document.getElementById("status").value
+        })
+    })
+    .then(()=>{
+        alert("근무 추가 완료");
+        loadSchedule();
+    });
+}
+
+// 비상근무 추가
+function addSpecial(){
+    fetch("/add_special",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            name:document.getElementById("s_name").value,
+            date:document.getElementById("s_date").value,
+            duty:document.getElementById("s_duty").value
+        })
+    })
+    .then(()=>{
+        alert("비상근무 추가 완료");
+        loadSchedule();
+    });
+}
+
+// 일괄 입력
 function addScheduleBulk(){
     const text = document.getElementById("schedule_bulk").value;
     const lines = text.split("\n").filter(x => x.trim() !== "");
 
-    fetch("/add_schedule_bulk", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ data: lines })
+    fetch("/add_schedule_bulk",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({data:lines})
     })
-    .then(()=> {
+    .then(()=>{
         alert("일괄 입력 완료");
         loadSchedule();
     });
