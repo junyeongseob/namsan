@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>남산분소 근무현황표</title>
+
 <style>
 table { border-collapse: collapse; width: 100%; }
 td, th { border: 1px solid #333; padding: 5px; text-align: center; }
@@ -65,47 +66,51 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
 <label>일: <input type="date" id="day"></label>
 <button onclick="loadSchedule()">조회</button>
 
-<!-- 🔝 인원 현황 -->
 <h3>오늘 인원 현황</h3>
 <div id="summary"></div>
 
-<!-- 🔝 유연근무 + 비상근무 -->
 <h3>유연근무자 & 비상근무</h3>
 <div class="flex-special-container">
     <div id="flex_column" class="flex-column"></div>
     <div id="special_column" class="special-column"></div>
 </div>
 
-<!-- 🔽 근무표 -->
 <h3>근무표</h3>
 <table>
 <thead id="head"></thead>
 <tbody id="body"></tbody>
 </table>
 
-<!-- 🔽 근무 추가 -->
 <h3>근무 추가</h3>
 이름: <input id="name">
 날짜: <input type="date" id="date_input">
 상태: <input id="status">
 <button onclick="addSchedule()">추가</button>
 
-<!-- 🔽 비상근무 추가 -->
 <h3>비상근무 추가</h3>
 이름: <input id="s_name">
 날짜: <input type="date" id="s_date">
 근무종류: <input id="s_duty">
 <button onclick="addSpecial()">추가</button>
 
-<!-- 🔽 일괄 입력 -->
 <h3>근무표 일괄 입력 (엑셀 복붙)</h3>
-<textarea id="schedule_bulk" rows="5" cols="60"
-placeholder="이름    날짜    상태"></textarea><br>
+<textarea id="schedule_bulk" rows="5" cols="60"></textarea><br>
 <button onclick="addScheduleBulk()">일괄 추가</button>
+
+<!-- 🔥 삭제 기능 -->
+<h3>근무 삭제</h3>
+이름: <input id="del_name">
+날짜: <input type="date" id="del_date">
+<button onclick="deleteSchedule()">삭제</button>
+
+<h3>비상근무 삭제</h3>
+이름: <input id="del_s_name">
+날짜: <input type="date" id="del_s_date">
+근무종류: <input id="del_s_duty">
+<button onclick="deleteSpecial()">삭제</button>
 
 <script>
 
-// 사람 정보
 const people = [
 ["남산분소장","남산분소 업무총괄","sky"],
 ["김재홍","남산분소 현장관리","sky"],
@@ -165,11 +170,10 @@ function loadSchedule(){
     .then(data=>{
         buildTable(data, dates);
         updateSummary(data);
-    })
-    .then(()=> showFlexSpecial(dates[0]));
+        showFlexSpecial(dates[0]);
+    });
 }
 
-// 인원 요약
 function updateSummary(data){
     const today = new Date().toISOString().slice(0,10);
 
@@ -187,7 +191,6 @@ function updateSummary(data){
         `총원 ${total} | 근무 ${work} | 휴무 ${off}`;
 }
 
-// 근무표
 function buildTable(data, dates){
     let head="<tr><th>이름(업무)</th>";
     dates.forEach(x=>head+=`<th>${x.slice(8)}</th>`);
@@ -207,10 +210,11 @@ function buildTable(data, dates){
         });
         body+="</tr>";
     });
+
     document.getElementById("body").innerHTML=body;
 }
 
-// 유연근무 + 비상근무
+// 🔥 색 적용된 비상근무
 function showFlexSpecial(date){
     const flexCol = document.getElementById("flex_column");
     const specialCol = document.getElementById("special_column");
@@ -230,61 +234,68 @@ function showFlexSpecial(date){
         if(special[date]){
             Object.keys(special[date]).forEach(duty=>{
                 const div = document.createElement("div");
-                div.textContent = `${duty}: ${special[date][duty].join(", ")}`;
+
+                const dutySpan = document.createElement("span");
+                dutySpan.textContent = duty + ": ";
+
+                if(duty.includes("산불")) dutySpan.className="fire";
+                else if(duty.includes("주의보")) dutySpan.className="alert";
+                else if(duty.includes("경보")) dutySpan.className="warning";
+
+                div.appendChild(dutySpan);
+
+                special[date][duty].forEach(name=>{
+                    const span = document.createElement("span");
+                    span.textContent = name;
+
+                    if(duty.includes("산불")) span.className="fire";
+                    else if(duty.includes("주의보")) span.className="alert";
+                    else if(duty.includes("경보")) span.className="warning";
+
+                    div.appendChild(span);
+                    div.appendChild(document.createTextNode(" "));
+                });
+
                 specialCol.appendChild(div);
             });
         }
     });
 }
 
-// 근무 추가
 function addSchedule(){
-    fetch("/add_schedule",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            name:document.getElementById("name").value,
-            date:document.getElementById("date_input").value,
-            status:document.getElementById("status").value
-        })
-    })
-    .then(()=>{
-        alert("근무 추가 완료");
-        loadSchedule();
-    });
+    fetch("/add_schedule",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+        name:name.value,
+        date:date_input.value,
+        status:status.value
+    })}).then(()=>{alert("추가 완료");loadSchedule();});
 }
 
-// 비상근무 추가
 function addSpecial(){
-    fetch("/add_special",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-            name:document.getElementById("s_name").value,
-            date:document.getElementById("s_date").value,
-            duty:document.getElementById("s_duty").value
-        })
-    })
-    .then(()=>{
-        alert("비상근무 추가 완료");
-        loadSchedule();
-    });
+    fetch("/add_special",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+        name:s_name.value,
+        date:s_date.value,
+        duty:s_duty.value
+    })}).then(()=>{alert("추가 완료");loadSchedule();});
 }
 
-// 일괄 입력
 function addScheduleBulk(){
-    const text = document.getElementById("schedule_bulk").value;
-    const lines = text.split("\n").filter(x => x.trim() !== "");
+    const lines = schedule_bulk.value.split("\n").filter(x=>x.trim());
+    fetch("/add_schedule_bulk",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({data:lines})}).then(()=>{alert("완료");loadSchedule();});
+}
 
-    fetch("/add_schedule_bulk",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({data:lines})
-    })
-    .then(()=>{
-        alert("일괄 입력 완료");
-        loadSchedule();
-    });
+function deleteSchedule(){
+    fetch("/delete_schedule",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name:del_name.value,date:del_date.value})
+    }).then(()=>{alert("삭제 완료");loadSchedule();});
+}
+
+function deleteSpecial(){
+    fetch("/delete_special",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name:del_s_name.value,date:del_s_date.value,duty:del_s_duty.value})
+    }).then(()=>{alert("삭제 완료");loadSchedule();});
 }
 
 </script>
