@@ -43,6 +43,10 @@ def get_db():
 
 init_db()
 
+@app.route("/ping")
+def ping():
+    return "ok", 200
+
 @app.route("/schedule")
 def get_schedule():
     dates = request.args.get("dates")
@@ -236,13 +240,13 @@ def upload_excel_auto():
 
     # 이름 사전
     known_names = [
-        "남산분소장",
+        "이성원",
         "김재홍", "강이레", "윤동희",
         "예린", "권용조", "손영인", "옥희영",
         "김영호", "서종명", "고현찬",
         "김복현", "서진숙", "정문길", "김태문",
         "최성복",
-        "이성원", "이유형"
+        "이성원", 
     ]
 
     def split_names(text):
