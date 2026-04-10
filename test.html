@@ -12,14 +12,18 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
 .휴무 { background-color: lightgray; }
 .반가, .연가, .조퇴, .보상휴가, .병가 { background-color: lightblue; }
 .출장 { background-color: orange; }
-.삼릉, .포석정, .새갓골, .용장, .동남산, .분소 { background-color: lightgreen; }
+
+/* 근무지 색 */
+.삼릉, .용장, .동남산, .분소 { background-color: lightgreen; }
+.포석정 { background-color: #fff3b0; }   /* 연노랑 */
+.새갓골 { background-color: #ffd6d6; }   /* 연핑크 */
 
 .sky { background:#d0e7ff; }
 .green { background:#e0ffc1; }
 .purple { background:#e8d4ff; }
 .orange { background:#ffe6cc; }
 .blue { background:#a0d8ff; }
-
+    
 .flex-special-container {
     display: flex;
     gap: 50px;
@@ -68,17 +72,17 @@ td, th { border: 1px solid #333; padding: 5px; text-align: center; }
 <h3>오늘 인원 현황</h3>
 <div id="summary"></div>
 
-<h3>유연근무자 & 비상근무</h3>
-<div class="flex-special-container">
-    <div id="flex_column" class="flex-column"></div>
-    <div id="special_column" class="special-column"></div>
-</div>
-
 <h3>근무표</h3>
 <table>
 <thead id="head"></thead>
 <tbody id="body"></tbody>
 </table>
+
+<h3>유연근무자 & 비상근무</h3>
+<div class="flex-special-container">
+    <div id="flex_column" class="flex-column"></div>
+    <div id="special_column" class="special-column"></div>
+</div>
 
 <h3>근무 추가</h3>
 이름: <input id="name">
